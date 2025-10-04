@@ -1,0 +1,1466 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aplikasi Sosiometri dan Sosiogram</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Libraries for Export/Import -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
+    <style id="app-styles">
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .view {
+            display: none;
+        }
+        .view.active {
+            display: block;
+        }
+        /* Custom styles for sociogram */
+        .node {
+            cursor: grab;
+            stroke: #111827; /* Dark background stroke */
+            stroke-width: 2px;
+            transition: all 0.2s ease-in-out;
+        }
+        .node:hover {
+            stroke-width: 4px;
+            stroke: #38bdf8; /* Light blue glow on hover */
+        }
+        .node:active {
+            cursor: grabbing;
+        }
+        .node-text {
+            pointer-events: none;
+            font-size: 12px;
+            fill: #e5e7eb; /* Light gray text */
+            text-shadow: 0 0 3px #000;
+        }
+        .link {
+            stroke-opacity: 0.9;
+        }
+        .link.like {
+            stroke: #3b82f6; /* Blue */
+            stroke-width: 2px;
+        }
+        .link.dislike {
+            stroke: #ef4444; /* Red */
+            stroke-dasharray: 5 3;
+            stroke-width: 1.5px;
+        }
+        .arrowhead {
+            stroke: none; /* Make sure arrowheads have no border */
+        }
+        .arrowhead.like {
+             fill: #3b82f6; /* Blue */
+        }
+        .arrowhead.dislike {
+             fill: #ef4444; /* Red */
+        }
+        .nav-button.active {
+            background-image: linear-gradient(to right, #7c3aed, #2563eb);
+            box-shadow: 0 0 15px rgba(99, 102, 241, 0.6);
+        }
+    </style>
+</head>
+<body class="bg-slate-900 text-gray-200">
+
+    <div id="loading-overlay" class="fixed inset-0 bg-slate-900 bg-opacity-80 z-50 flex items-center justify-center hidden">
+        <div class="animate-spin rounded-full h-32 w-32 border-t-2 border-b-2 border-cyan-500"></div>
+        <p class="text-white ml-4">Memproses...</p>
+    </div>
+
+    <!-- Welcome View -->
+    <div id="welcome-view" class="container mx-auto p-4 md:p-8 flex flex-col items-center justify-center min-h-screen text-center">
+        <div class="bg-slate-800/50 backdrop-blur-sm border border-slate-700 rounded-lg p-8 max-w-3xl w-full">
+            <h1 class="text-4xl md:text-5xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-fuchsia-500 to-cyan-500 mb-4">
+                Selamat Datang!
+            </h1>
+            <p class="text-slate-300 text-lg mb-6">
+                Aplikasi ini dirancang untuk membantu Anda melakukan analisis sosiometri, memetakan, dan memahami pola interaksi sosial di dalam sebuah kelompok atau kelas.
+            </p>
+
+            <div class="mt-8 w-full max-w-md mx-auto">
+                <label for="school-name-input" class="block text-sm font-medium text-slate-300 mb-2">Nama Sekolah</label>
+                <input type="text" id="school-name-input" placeholder="Masukkan nama sekolah Anda" class="w-full p-3 bg-slate-700 border border-slate-600 rounded-md focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 text-white placeholder-gray-400 text-center">
+            </div>
+
+            <button id="start-app-btn" class="mt-8 w-full md:w-auto bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white font-bold py-3 px-10 rounded-lg transition-all duration-300 text-lg transform hover:scale-105">
+                Mulai Aplikasi
+            </button>
+
+            <div class="text-left space-y-6 mt-10">
+                <h2 class="text-2xl font-semibold text-cyan-400 border-b border-slate-600 pb-2">Cara Penggunaan</h2>
+                <div class="space-y-4 text-slate-400">
+                    <p><strong>1. Panel Admin:</strong> Mulai dengan membuat data Guru BK, kemudian buat kelas dan tambahkan data siswa, baik secara manual maupun impor dari Excel.</p>
+                    <p><strong>2. Input Pilihan:</strong> Masukkan data pilihan dari setiap siswa. Pilih kelas dan nama siswa, lalu tentukan 3 teman yang paling disukai dan 3 yang tidak disukai.</p>
+                    <p><strong>3. Hasil & Sosiogram:</strong> Setelah semua data pilihan terisi, buka tab ini. Pilih kelas untuk melihat sosiogram interaktif, analisis status siswa, dan matriks sosiometri secara lengkap.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main App Container -->
+    <div id="app-container" class="hidden">
+        <div class="container mx-auto p-4 md:p-6 lg:p-8">
+            <header class="bg-slate-800/50 backdrop-blur-sm border border-slate-700 rounded-lg p-6 mb-6">
+                <div class="text-center">
+                    <h1 class="text-3xl md:text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-fuchsia-500 to-cyan-500">
+                        Aplikasi Sosiometri & Sosiogram
+                    </h1>
+                    <p id="school-name-display" class="text-slate-300 mt-2 text-xl font-semibold"></p>
+                </div>
+                <div class="text-center text-slate-400 text-sm mt-2">
+                    <span id="current-date"></span>
+                </div>
+            </header>
+
+            <nav class="flex flex-wrap gap-2 mb-6 justify-center items-center">
+                <button id="back-to-welcome-btn" class="text-white font-bold py-2 px-5 rounded-lg transition-all duration-300 transform hover:scale-105 bg-slate-800 border border-slate-700 hover:bg-slate-700">
+                    &larr; Halaman Awal
+                </button>
+                <button onclick="switchView('admin')" id="nav-admin" class="nav-button active text-white font-bold py-2 px-5 rounded-lg transition-all duration-300 transform hover:scale-105 bg-slate-800 border border-slate-700 hover:bg-slate-700">
+                    Panel Admin
+                </button>
+                <button onclick="switchView('input')" id="nav-input" class="nav-button text-white font-bold py-2 px-5 rounded-lg transition-all duration-300 transform hover:scale-105 bg-slate-800 border border-slate-700 hover:bg-slate-700">
+                    Input Pilihan
+                </button>
+                <button onclick="switchView('hasil')" id="nav-hasil" class="nav-button text-white font-bold py-2 px-5 rounded-lg transition-all duration-300 transform hover:scale-105 bg-slate-800 border border-slate-700 hover:bg-slate-700">
+                    Hasil & Sosiogram
+                </button>
+            </nav>
+
+            <main>
+                <!-- Panel Admin View -->
+                <div id="view-admin" class="view active">
+                     <div class="grid lg:grid-cols-3 gap-6">
+                        <!-- Teacher Management -->
+                        <div class="bg-slate-800/50 backdrop-blur-sm border border-slate-700 p-6 rounded-lg lg:col-span-1">
+                            <h2 class="text-2xl font-semibold mb-4 border-b border-slate-600 pb-2 text-fuchsia-400">Manajemen Guru BK</h2>
+                            <form id="form-tambah-guru" class="mb-4 space-y-3">
+                                <input type="text" id="nama-guru" placeholder="Nama Guru BK" class="w-full p-2 bg-slate-700 border border-slate-600 rounded-md focus:ring-2 focus:ring-fuchsia-500 focus:border-fuchsia-500 text-white placeholder-gray-400" required>
+                                <input type="text" id="nip-guru" placeholder="NIP/ID Guru (Opsional)" class="w-full p-2 bg-slate-700 border border-slate-600 rounded-md focus:ring-2 focus:ring-fuchsia-500 focus:border-fuchsia-500 text-white placeholder-gray-400">
+                                <button type="submit" class="w-full mt-2 bg-gradient-to-r from-fuchsia-500 to-purple-500 hover:from-fuchsia-600 hover:to-purple-600 text-white font-bold py-2 px-4 rounded-md transition-all duration-300">Tambah Guru</button>
+                            </form>
+                            <div id="daftar-guru" class="space-y-2 max-h-96 overflow-y-auto">
+                                <!-- Teacher list rendered here -->
+                            </div>
+                        </div>
+
+                        <div class="lg:col-span-2 grid md:grid-cols-1 gap-6">
+                             <!-- Class Management -->
+                            <div class="bg-slate-800/50 backdrop-blur-sm border border-slate-700 p-6 rounded-lg">
+                                <h2 class="text-2xl font-semibold mb-4 border-b border-slate-600 pb-2 text-cyan-400">Manajemen Kelas</h2>
+                                <form id="form-tambah-kelas" class="mb-4 grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
+                                    <input type="text" id="nama-kelas" placeholder="Nama Kelas Baru (cth: X IPA 1)" class="w-full p-2 bg-slate-700 border border-slate-600 rounded-md focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 text-white placeholder-gray-400" required>
+                                    <select id="pilih-guru-kelas" class="w-full p-2 bg-slate-700 border border-slate-600 rounded-md focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 text-white" required>
+                                        <option value="">Pilih Guru Penanggung Jawab</option>
+                                    </select>
+                                    <button type="submit" class="w-full md:col-span-2 mt-2 bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white font-bold py-2 px-4 rounded-md transition-all duration-300">Tambah Kelas</button>
+                                </form>
+                                <div id="daftar-kelas">
+                                    <!-- Class list rendered here -->
+                                </div>
+                            </div>
+
+                            <!-- Student Management -->
+                            <div id="panel-manajemen-siswa" class="bg-slate-800/50 backdrop-blur-sm border border-slate-700 p-6 rounded-lg hidden">
+                                <h2 class="text-2xl font-semibold mb-4 border-b border-slate-600 pb-2">Manajemen Siswa: <span id="nama-kelas-terpilih" class="text-cyan-400"></span></h2>
+                                <form id="form-tambah-siswa" class="space-y-3">
+                                    <input type="text" id="nama-siswa" placeholder="Nama Siswa Baru" class="w-full p-2 bg-slate-700 border border-slate-600 rounded-md focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 text-white placeholder-gray-400" required>
+                                    <input type="text" id="nisn-siswa" placeholder="NISN" class="w-full p-2 bg-slate-700 border border-slate-600 rounded-md focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 text-white placeholder-gray-400" required>
+                                    <select id="gender-siswa" class="w-full p-2 bg-slate-700 border border-slate-600 rounded-md focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 text-white" required>
+                                        <option value="">Pilih Jenis Kelamin</option>
+                                        <option value="L">Laki-laki</option>
+                                        <option value="P">Perempuan</option>
+                                    </select>
+                                    <button type="submit" class="w-full bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white font-bold py-2 px-4 rounded-md transition-all duration-300">Tambah Siswa</button>
+                                </form>
+                                <div class="mt-6">
+                                    <h3 class="text-lg font-medium text-slate-300 mb-2">Impor Siswa dari Excel</h3>
+                                    <p class="text-sm text-slate-400 mb-2">Unggah file .xlsx dengan kolom: "Nama", "NISN", "Gender" (L/P).</p>
+                                    <input type="file" id="import-excel-input" class="w-full text-sm text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-cyan-500/10 file:text-cyan-300 hover:file:bg-cyan-500/20" accept=".xlsx, .xls">
+                                </div>
+                                <div class="mt-4 overflow-x-auto max-h-96">
+                                    <table class="min-w-full divide-y divide-slate-700">
+                                        <thead class="bg-slate-700/50">
+                                            <tr>
+                                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-slate-300 uppercase tracking-wider">Nama Siswa</th>
+                                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-slate-300 uppercase tracking-wider">NISN</th>
+                                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-slate-300 uppercase tracking-wider">Gender</th>
+                                                <th scope="col" class="px-6 py-3 text-right text-xs font-medium text-slate-300 uppercase tracking-wider">Aksi</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="daftar-siswa" class="divide-y divide-slate-700">
+                                            <!-- Rows will be populated by JS -->
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Input Pilihan Siswa View -->
+                <div id="view-input" class="view">
+                    <div class="bg-slate-800/50 backdrop-blur-sm border border-slate-700 p-6 rounded-lg max-w-4xl mx-auto">
+                        <h2 class="text-2xl font-semibold mb-4 border-b border-slate-600 pb-2 text-cyan-400">Input Pilihan Sosiometri</h2>
+                        <div class="space-y-4">
+                            <div>
+                                <label for="pilih-kelas-input" class="block text-sm font-medium text-slate-300">Pilih Kelas</label>
+                                <select id="pilih-kelas-input" class="mt-1 block w-full p-2 bg-slate-700 border border-slate-600 rounded-md focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 text-white"></select>
+                            </div>
+                            <div>
+                                <label for="pilih-pemilih" class="block text-sm font-medium text-slate-300">Nama Anda</label>
+                                <select id="pilih-pemilih" class="mt-1 block w-full p-2 bg-slate-700 border border-slate-600 rounded-md focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 text-white"></select>
+                            </div>
+                            <div id="panel-pilihan" class="hidden grid md:grid-cols-2 gap-6 pt-4">
+                                <div>
+                                    <label class="block font-medium text-emerald-400">Pilih max. 3 teman yang PALING DISUKAI</label>
+                                    <div id="daftar-pilihan-suka" class="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2 border border-emerald-500/30 p-3 rounded-md max-h-60 overflow-y-auto bg-emerald-500/10">
+                                    </div>
+                                </div>
+                                <div>
+                                    <label class="block font-medium text-pink-400">Pilih max. 3 teman yang TIDAK DISUKAI</label>
+                                    <div id="daftar-pilihan-tidak-suka" class="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2 border border-pink-500/30 p-3 rounded-md max-h-60 overflow-y-auto bg-pink-500/10">
+                                    </div>
+                                </div>
+                            </div>
+                            <button id="submit-pilihan" class="w-full bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white font-bold py-3 px-4 rounded-md transition-all duration-300 disabled:opacity-50">Simpan Pilihan</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Hasil & Sosiogram View -->
+                <div id="view-hasil" class="view">
+                     <div class="bg-slate-800/50 backdrop-blur-sm border border-slate-700 p-6 rounded-lg">
+                        <h2 class="text-2xl font-semibold mb-4 border-b border-slate-600 pb-2 text-cyan-400">Hasil Analisis Sosiometri</h2>
+                        <div class="flex flex-col sm:flex-row items-center space-y-2 sm:space-y-0 sm:space-x-4 mb-4">
+                            <label for="pilih-kelas-hasil" class="text-sm font-medium text-slate-300">Pilih Kelas:</label>
+                            <select id="pilih-kelas-hasil" class="w-full sm:w-auto p-2 bg-slate-700 border border-slate-600 rounded-md focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 text-white"></select>
+                            <button id="generate-report" class="w-full sm:w-auto bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white font-bold py-2 px-4 rounded-md transition-all duration-300">Tampilkan Hasil</button>
+                        </div>
+
+                        <div id="konten-hasil" class="hidden">
+                            <div id="report-content">
+                                <h3 class="text-xl font-semibold mt-6 mb-2 text-center text-transparent bg-clip-text bg-gradient-to-r from-fuchsia-500 to-cyan-500">Sosiogram Interaksi Siswa</h3>
+                                <div class="w-full h-[50vh] md:h-[600px] border border-slate-700 rounded-lg bg-slate-900/50 overflow-hidden relative">
+                                    <svg id="sociogram" class="w-full h-full"></svg>
+                                    <div class="absolute top-2 left-2 p-2 bg-slate-800 bg-opacity-80 rounded-md shadow-lg text-xs border border-slate-700">
+                                        <p class="flex items-center">
+                                            <svg class="w-4 h-4 mr-2" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="10" cy="10" r="8" fill="#3b82f6"/></svg>
+                                            Laki-laki
+                                        </p>
+                                        <p class="flex items-center mt-1">
+                                            <svg class="w-4 h-4 mr-2" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10 2L18 17H2L10 2Z" fill="#ec4899"/></svg>
+                                            Perempuan
+                                        </p>
+                                        <p class="flex items-center mt-2"><span class="inline-block w-4 h-0.5 bg-blue-500 mr-2"></span> Disukai</p>
+                                        <p class="flex items-center mt-1"><span class="inline-block w-4 h-0.5 bg-red-500 mr-2"></span> Tidak Disukai</p>
+                                    </div>
+                                </div>
+
+                                <h3 class="text-xl font-semibold mt-8 mb-4 text-center text-transparent bg-clip-text bg-gradient-to-r from-fuchsia-500 to-cyan-500">Analisis Status Sosiometri</h3>
+                                <div class="grid md:grid-cols-3 gap-4 text-center">
+                                    <div class="p-4 bg-yellow-500/10 rounded-lg border border-yellow-500/30">
+                                        <h4 class="font-bold text-yellow-300">Bintang Positif (Stars)</h4>
+                                        <ul id="list-bintang" class="text-yellow-400 mt-2"></ul>
+                                    </div>
+                                    <div class="p-4 bg-pink-500/10 rounded-lg border border-pink-500/30">
+                                        <h4 class="font-bold text-pink-300">Siswa Ditolak (Rejected)</h4>
+                                        <ul id="list-ditolak" class="text-pink-400 mt-2"></ul>
+                                    </div>
+                                    <div class="p-4 bg-sky-500/10 rounded-lg border border-sky-500/30">
+                                        <h4 class="font-bold text-sky-300">Terisolasi (Isolates)</h4>
+                                        <ul id="list-isolasi" class="text-sky-400 mt-2"></ul>
+                                    </div>
+                                </div>
+
+
+                                <h3 class="text-xl font-semibold mt-8 mb-2 text-center text-transparent bg-clip-text bg-gradient-to-r from-fuchsia-500 to-cyan-500">Matriks Sosiometri</h3>
+                                <div class="overflow-x-auto border border-slate-700 rounded-lg">
+                                    <table class="min-w-full divide-y divide-slate-700">
+                                        <thead id="matriks-head" class="bg-slate-800"></thead>
+                                        <tbody id="matriks-body" class="divide-y divide-slate-700"></tbody>
+                                    </table>
+                                </div>
+                            </div>
+                            <div id="export-buttons" class="mt-8 flex flex-col sm:flex-row gap-4 justify-center">
+                                <button id="export-excel-btn" class="bg-gradient-to-r from-emerald-500 to-green-500 hover:from-emerald-600 hover:to-green-600 text-white font-bold py-2 px-6 rounded-md transition-all duration-300 flex items-center justify-center gap-2">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M2 5a2 2 0 012-2h12a2 2 0 012 2v10a2 2 0 01-2 2H4a2 2 0 01-2-2V5zm3.5 1a.5.5 0 00-.5.5v2a.5.5 0 00.5.5h2a.5.5 0 00.5-.5v-2a.5.5 0 00-.5-.5h-2zM8 6a.5.5 0 00-.5.5v2a.5.5 0 00.5.5h2a.5.5 0 00.5-.5v-2a.5.5 0 00-.5-.5h-2zm3.5.5a.5.5 0 00-.5-.5h-2a.5.5 0 00-.5.5v2a.5.5 0 00.5.5h2a.5.5 0 00.5-.5v-2zM5.5 10a.5.5 0 00-.5.5v2a.5.5 0 00.5.5h2a.5.5 0 00.5-.5v-2a.5.5 0 00-.5-.5h-2zm2.5.5a.5.5 0 00-.5.5v2a.5.5 0 00.5.5h2a.5.5 0 00.5-.5v-2a.5.5 0 00-.5-.5h-2zm3.5-.5a.5.5 0 00-.5.5v2a.5.5 0 00.5.5h2a.5.5 0 00.5-.5v-2a.5.5 0 00-.5-.5h-2z" /></svg>
+                                    Unduh Excel
+                                </button>
+                                <button id="export-pdf-btn" class="bg-gradient-to-r from-rose-500 to-pink-500 hover:from-rose-600 hover:to-pink-600 text-white font-bold py-2 px-6 rounded-md transition-all duration-300 flex items-center justify-center gap-2">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5 4V3a2 2 0 012-2h6a2 2 0 012 2v1h2a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2V6a2 2 0 012-2h2zm2-1a1 1 0 00-1 1v1h8V4a1 1 0 00-1-1H7zM5 8v8h10V8H5z" clip-rule="evenodd" /></svg>
+                                    Cetak/Unduh PDF
+                                </button>
+                            </div>
+                        </div>
+                     </div>
+                </div>
+            </main>
+        </div>
+        <footer class="text-center p-4 text-xs text-slate-500 border-t border-slate-800 mt-8">
+            Aplikasi Sosiometri & Sosiogram | Dibuat oleh Muhammad Hasratul
+        </footer>
+    </div>
+    
+    <!-- Modal for editing student name -->
+    <div id="edit-student-modal" class="fixed inset-0 bg-black bg-opacity-70 overflow-y-auto h-full w-full hidden z-40">
+      <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-slate-800 border-slate-700">
+        <div class="mt-3 text-center">
+          <h3 class="text-lg leading-6 font-medium text-cyan-400">Ubah Data Siswa</h3>
+          <div class="mt-2 px-7 py-3 space-y-3">
+            <input type="text" id="edit-nama-siswa-input" placeholder="Nama Siswa" class="w-full p-2 bg-slate-700 border border-slate-600 rounded-md focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 text-white placeholder-gray-400" />
+            <input type="text" id="edit-nisn-siswa-input" placeholder="NISN" class="w-full p-2 bg-slate-700 border border-slate-600 rounded-md focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 text-white placeholder-gray-400" />
+            <select id="edit-gender-siswa-select" class="w-full p-2 bg-slate-700 border border-slate-600 rounded-md focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 text-white">
+                <option value="L">Laki-laki</option>
+                <option value="P">Perempuan</option>
+            </select>
+          </div>
+          <div class="items-center px-4 py-3">
+            <button id="save-edit-student-button" class="px-4 py-2 bg-green-500 text-white text-base font-medium rounded-md w-auto shadow-sm hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-green-300">
+              Simpan
+            </button>
+            <button id="cancel-edit-student-button" class="px-4 py-2 bg-slate-600 text-white text-base font-medium rounded-md w-auto ml-2 shadow-sm hover:bg-slate-500 focus:outline-none focus:ring-2 focus:ring-slate-400">
+              Batal
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal for editing class name -->
+    <div id="edit-class-modal" class="fixed inset-0 bg-black bg-opacity-70 overflow-y-auto h-full w-full hidden z-40">
+      <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-slate-800 border-slate-700">
+        <div class="mt-3 text-center">
+          <h3 class="text-lg leading-6 font-medium text-cyan-400">Ubah Data Kelas</h3>
+          <div class="mt-2 px-7 py-3 space-y-3">
+            <input type="text" id="edit-nama-kelas-input" placeholder="Nama Kelas" class="w-full p-2 bg-slate-700 border border-slate-600 rounded-md focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 text-white placeholder-gray-400" />
+            <select id="edit-pilih-guru-kelas-select" class="w-full p-2 bg-slate-700 border border-slate-600 rounded-md focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 text-white">
+                 <!-- Teacher options will be populated by JS -->
+            </select>
+          </div>
+          <div class="items-center px-4 py-3">
+            <button id="save-edit-class-button" class="px-4 py-2 bg-green-500 text-white text-base font-medium rounded-md w-auto shadow-sm hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-green-300">
+              Simpan
+            </button>
+            <button id="cancel-edit-class-button" class="px-4 py-2 bg-slate-600 text-white text-base font-medium rounded-md w-auto ml-2 shadow-sm hover:bg-slate-500 focus:outline-none focus:ring-2 focus:ring-slate-400">
+              Batal
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+
+    <script type="module">
+        // --- LOCAL STORAGE DATABASE WRAPPER ---
+        const DB_PREFIX = 'sociometryApp_';
+
+        const _getCollection = (collectionName) => {
+            const data = localStorage.getItem(DB_PREFIX + collectionName);
+            return data ? JSON.parse(data) : [];
+        };
+
+        const _saveCollection = (collectionName, data) => {
+            localStorage.setItem(DB_PREFIX + collectionName, JSON.stringify(data));
+        };
+
+        const db_getCollection = (collectionName, whereClause = null) => {
+            let collection = _getCollection(collectionName);
+            if (whereClause) {
+                const [field, , value] = whereClause; // [field, op, value]
+                collection = collection.filter(item => item[field] === value);
+            }
+            return collection;
+        };
+        
+        const db_getDoc = (collectionName, docId) => {
+            const collection = _getCollection(collectionName);
+            return collection.find(doc => doc.id === docId);
+        };
+        
+        const db_setDoc = (collectionName, docId, data) => {
+            let collection = _getCollection(collectionName);
+            const docIndex = collection.findIndex(doc => doc.id === docId);
+            if (docIndex > -1) {
+                // Merge data for updates
+                collection[docIndex] = { ...collection[docIndex], ...data };
+            } else {
+                collection.push({ id: docId, ...data });
+            }
+            _saveCollection(collectionName, collection);
+        };
+
+        const db_deleteDoc = (collectionName, docId) => {
+            let collection = _getCollection(collectionName);
+            const updatedCollection = collection.filter(doc => doc.id !== docId);
+            _saveCollection(collectionName, updatedCollection);
+        };
+
+        const db_deleteWhere = (collectionName, whereClause) => {
+            let collection = _getCollection(collectionName);
+            const [field, , value] = whereClause;
+            const updatedCollection = collection.filter(item => item[field] !== value);
+            _saveCollection(collectionName, updatedCollection);
+        };
+        
+        // --- SAMPLE DATA ---
+        function populateWithSampleData() {
+            // Check if data already exists to prevent overwriting
+            if (_getCollection('classes').length > 0) return;
+
+            // New larger sample data
+            const sampleTeacherId = 'teacher_1700000000000';
+            const sampleTeacher = { id: sampleTeacherId, name: 'Dra. Endang S.', nip: '196805151995012001' };
+            _saveCollection('teachers', [sampleTeacher]);
+
+            const sampleClassId = 'class_1700000000000';
+            const sampleClass = { id: sampleClassId, name: 'XII IPS 1', teacherId: sampleTeacherId };
+            _saveCollection('classes', [sampleClass]);
+
+            const studentNames = [
+                "Adi Nugroho", "Agus Setiawan", "Ahmad Zulkarnain", "Aisha Putri", "Ananda Sari",
+                "Andi Pratama", "Ani Suryani", "Ardiansyah", "Bagus Wicaksono", "Bayu Perdana",
+                "Bunga Lestari", "Cahya Wulan", "Candra Gunawan", "Citra Kirana", "Dedi Hartono",
+                "Dewi Sartika", "Dian Novita", "Dimas Anggara", "Eka Wahyuni", "Fajar Sidik",
+                "Farah Adiba", "Galih Santoso", "Gita Puspita", "Hadi Wijaya", "Hesti Rahayu",
+                "Indra Lesmana", "Intan Permatasari", "Irfan Hakim", "Joko Widodo", "Kartika Candra",
+                "Lia Amelia", "Maya Anggraini", "Nanda Pratama", "Putri Ayu", "Rizky Ramadhan"
+            ];
+
+            const sampleStudents = studentNames.map((name, index) => {
+                const id = `s_${index + 1}`;
+                const isMale = (index % 2 === 0) || (index > 25); // Just a way to mix genders
+                return {
+                    id: id,
+                    classId: sampleClassId,
+                    name: name,
+                    nisn: `200${index + 1}`.padStart(4, '0'),
+                    gender: isMale ? 'L' : 'P'
+                };
+            });
+
+            _saveCollection('students', sampleStudents);
+
+            const studentIds = sampleStudents.map(s => s.id);
+            const sampleChoices = [];
+
+            studentIds.forEach(chooserId => {
+                const otherStudents = studentIds.filter(id => id !== chooserId);
+                
+                // Shuffle and pick liked
+                const shuffledLiked = otherStudents.sort(() => 0.5 - Math.random());
+                const likedCount = Math.floor(Math.random() * 4); // 0 to 3
+                const likedIds = shuffledLiked.slice(0, likedCount);
+                
+                // Filter out liked ones for dislike pool
+                const dislikePool = otherStudents.filter(id => !likedIds.includes(id));
+                
+                // Shuffle and pick disliked
+                const shuffledDisliked = dislikePool.sort(() => 0.5 - Math.random());
+                const dislikedCount = Math.floor(Math.random() * 4); // 0 to 3
+                const dislikedIds = shuffledDisliked.slice(0, dislikedCount);
+                
+                sampleChoices.push({
+                    id: `${sampleClassId}_${chooserId}`,
+                    classId: sampleClassId,
+                    chooserId: chooserId,
+                    likedIds: likedIds,
+                    dislikedIds: dislikedIds
+                });
+            });
+
+            _saveCollection('choices', sampleChoices);
+
+            console.log('35-student sample data has been populated.');
+        }
+
+
+        // --- GLOBAL STATE ---
+        let currentClassId = null;
+        let sociogramSimulation;
+        let allClasses = [];
+        let allTeachers = [];
+        let currentAnalysisData = {}; // To store data for export
+
+        // --- UI REFRESH FUNCTIONS ---
+        function refreshUI() {
+            allTeachers = db_getCollection('teachers');
+            allClasses = db_getCollection('classes');
+            
+            renderTeachers(allTeachers);
+            renderClasses(allClasses, allTeachers);
+            populateClassDropdowns(allClasses);
+            
+            if (currentClassId) {
+                const currentClassStillExists = allClasses.some(c => c.id === currentClassId);
+                if (currentClassStillExists) {
+                    refreshStudentsForCurrentClass();
+                } else {
+                    currentClassId = null;
+                    document.getElementById('panel-manajemen-siswa').classList.add('hidden');
+                }
+            }
+        }
+
+        function refreshStudentsForCurrentClass() {
+            if (!currentClassId) return;
+            const students = db_getCollection('students', ['classId', '==', currentClassId]);
+            renderStudents(students);
+        }
+
+
+        // --- VIEW SWITCHING ---
+        const views = document.querySelectorAll('.view');
+        const navButtons = document.querySelectorAll('.nav-button');
+
+        window.switchView = (viewName) => {
+            views.forEach(view => {
+                view.classList.toggle('active', view.id === `view-${viewName}`);
+            });
+            navButtons.forEach(button => {
+                button.classList.toggle('active', button.id === `nav-${viewName}`);
+            });
+        };
+
+        // --- ADMIN PANEL: TEACHER MANAGEMENT ---
+        const formTambahGuru = document.getElementById('form-tambah-guru');
+        const daftarGuruDiv = document.getElementById('daftar-guru');
+        
+        const renderTeachers = (teachers) => {
+            const guruSelects = [document.getElementById('pilih-guru-kelas'), document.getElementById('edit-pilih-guru-kelas-select')];
+            
+            daftarGuruDiv.innerHTML = '';
+             if (teachers.length === 0) {
+                 daftarGuruDiv.innerHTML = '<p class="text-center text-slate-400">Belum ada guru.</p>';
+            }
+
+            guruSelects.forEach(select => {
+                const currentVal = select.value;
+                select.innerHTML = '<option value="">Pilih Guru Penanggung Jawab</option>';
+                 teachers.sort((a, b) => a.name.localeCompare(b.name)).forEach(teacher => {
+                    select.innerHTML += `<option value="${teacher.id}">${teacher.name}</option>`;
+                });
+                select.value = currentVal;
+            });
+            
+            teachers.sort((a, b) => a.name.localeCompare(b.name)).forEach(teacher => {
+                const teacherElement = document.createElement('div');
+                teacherElement.className = 'p-2 my-1 border border-slate-700 rounded-md flex justify-between items-center';
+                teacherElement.innerHTML = `
+                    <div>
+                        <p class="font-medium text-sm">${teacher.name}</p>
+                        <p class="text-xs text-slate-400">${teacher.nip || 'NIP tidak ada'}</p>
+                    </div>
+                    <button data-id="${teacher.id}" class="delete-teacher-btn bg-red-500/80 text-white px-2 py-1 text-xs rounded hover:bg-red-500">Hapus</button>
+                `;
+                daftarGuruDiv.appendChild(teacherElement);
+            });
+        };
+
+        formTambahGuru.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const teacherName = document.getElementById('nama-guru').value.trim();
+            const teacherNip = document.getElementById('nip-guru').value.trim();
+            if (teacherName) {
+                const teacherId = `teacher_${Date.now()}`;
+                db_setDoc('teachers', teacherId, { name: teacherName, nip: teacherNip });
+                formTambahGuru.reset();
+                refreshUI();
+            }
+        });
+        
+        daftarGuruDiv.addEventListener('click', (e) => {
+            if(e.target.classList.contains('delete-teacher-btn')) {
+                const teacherId = e.target.dataset.id;
+                if(confirm('Yakin ingin menghapus guru ini? Penugasan guru ini di semua kelas akan dihapus.')) {
+                    db_deleteDoc('teachers', teacherId);
+                    // Unassign teacher from classes
+                    const classesToUpdate = db_getCollection('classes');
+                    classesToUpdate.forEach(cls => {
+                        if (cls.teacherId === teacherId) {
+                            cls.teacherId = null;
+                            db_setDoc('classes', cls.id, cls);
+                        }
+                    });
+                    refreshUI();
+                }
+            }
+        });
+
+        // --- ADMIN PANEL: CLASS MANAGEMENT ---
+        const formTambahKelas = document.getElementById('form-tambah-kelas');
+        const namaKelasInput = document.getElementById('nama-kelas');
+        const daftarKelasDiv = document.getElementById('daftar-kelas');
+
+        formTambahKelas.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const className = namaKelasInput.value.trim();
+            const teacherId = document.getElementById('pilih-guru-kelas').value;
+            if (className && teacherId) {
+                const classId = `class_${Date.now()}`;
+                db_setDoc('classes', classId, { name: className, teacherId: teacherId });
+                formTambahKelas.reset();
+                refreshUI();
+            } else {
+                alert("Nama kelas dan guru penanggung jawab harus diisi.");
+            }
+        });
+        
+        const renderClasses = (classes, teachers) => {
+            daftarKelasDiv.innerHTML = '';
+            if (classes.length === 0) {
+                 daftarKelasDiv.innerHTML = '<p class="text-center text-slate-400">Belum ada kelas. Silakan tambahkan.</p>';
+                 return;
+            }
+            classes.sort((a, b) => a.name.localeCompare(b.name)).forEach(cls => {
+                const teacherName = teachers.find(t => t.id === cls.teacherId)?.name || 'Belum diatur';
+                const classElement = document.createElement('div');
+                classElement.className = `p-3 my-2 border border-slate-700 rounded-lg flex justify-between items-center cursor-pointer transition-colors hover:bg-slate-700 ${currentClassId === cls.id ? 'bg-slate-700 ring-2 ring-cyan-500' : ''}`;
+                classElement.innerHTML = `
+                    <div class="flex-grow" data-action="select-class">
+                        <span class="font-medium" data-action="select-class">${cls.name}</span>
+                        <p class="text-xs text-slate-400" data-action="select-class">Guru BK: ${teacherName}</p>
+                    </div>
+                    <div class="flex-shrink-0">
+                        <button data-id="${cls.id}" class="edit-class-btn text-cyan-400 hover:text-cyan-300 text-xs py-1 px-2 rounded">Ubah</button>
+                        <button data-id="${cls.id}" class="delete-class-btn bg-red-500/80 text-white px-2 py-1 text-xs rounded hover:bg-red-500 ml-2">Hapus</button>
+                    </div>
+                `;
+                classElement.addEventListener('click', (e) => {
+                    const action = e.target.dataset.action;
+                    if (action === 'select-class') {
+                         selectClass(cls.id, cls.name);
+                    }
+                });
+                daftarKelasDiv.appendChild(classElement);
+            });
+        };
+
+        daftarKelasDiv.addEventListener('click', (e) => {
+            if (e.target.classList.contains('delete-class-btn')) {
+                const classId = e.target.dataset.id;
+                if (confirm('Apakah Anda yakin ingin menghapus kelas ini? Semua data siswa dan pilihan di dalamnya akan hilang.')) {
+                    db_deleteDoc('classes', classId);
+                    db_deleteWhere('students', ['classId', '==', classId]);
+                    db_deleteWhere('choices', ['classId', '==', classId]);
+
+                    if (currentClassId === classId) {
+                        document.getElementById('panel-manajemen-siswa').classList.add('hidden');
+                        currentClassId = null;
+                    }
+                    refreshUI();
+                }
+            } else if (e.target.classList.contains('edit-class-btn')) {
+                const classId = e.target.dataset.id;
+                showEditClassModal(classId);
+            }
+        });
+
+        function showEditClassModal(classId) {
+            const classData = db_getDoc('classes', classId);
+            if (!classData) return;
+
+            const modal = document.getElementById('edit-class-modal');
+            const nameInput = document.getElementById('edit-nama-kelas-input');
+            const teacherSelect = document.getElementById('edit-pilih-guru-kelas-select');
+            const saveBtn = document.getElementById('save-edit-class-button');
+            const cancelBtn = document.getElementById('cancel-edit-class-button');
+
+            nameInput.value = classData.name;
+            teacherSelect.value = classData.teacherId;
+            modal.classList.remove('hidden');
+
+            const saveHandler = () => {
+                const newName = nameInput.value.trim();
+                const newTeacherId = teacherSelect.value;
+                if(newName && newTeacherId) {
+                    db_setDoc('classes', classId, { ...classData, name: newName, teacherId: newTeacherId });
+                    closeModal();
+                    refreshUI();
+                } else {
+                    alert('Nama kelas dan guru tidak boleh kosong.');
+                }
+            };
+            
+            const closeModal = () => {
+                modal.classList.add('hidden');
+                saveBtn.removeEventListener('click', saveHandler);
+                cancelBtn.removeEventListener('click', closeModal);
+            };
+
+            saveBtn.addEventListener('click', saveHandler);
+            cancelBtn.addEventListener('click', closeModal);
+        }
+
+        // --- ADMIN PANEL: STUDENT MANAGEMENT ---
+        const panelManajemenSiswa = document.getElementById('panel-manajemen-siswa');
+        const formTambahSiswa = document.getElementById('form-tambah-siswa');
+        const namaSiswaInput = document.getElementById('nama-siswa');
+        const nisnSiswaInput = document.getElementById('nisn-siswa');
+        const genderSiswaSelect = document.getElementById('gender-siswa');
+        const daftarSiswaBody = document.getElementById('daftar-siswa');
+        const importExcelInput = document.getElementById('import-excel-input');
+
+        const selectClass = (classId, className) => {
+            currentClassId = classId;
+            document.querySelectorAll('#daftar-kelas > div').forEach(div => {
+                 div.classList.toggle('bg-slate-700', div.querySelector('button.delete-class-btn').dataset.id === classId);
+                 div.classList.toggle('ring-2', div.querySelector('button.delete-class-btn').dataset.id === classId);
+                 div.classList.toggle('ring-cyan-500', div.querySelector('button.delete-class-btn').dataset.id === classId);
+            });
+            panelManajemenSiswa.classList.remove('hidden');
+            document.getElementById('nama-kelas-terpilih').textContent = className;
+            refreshStudentsForCurrentClass();
+        };
+        
+        const renderStudents = (students) => {
+            daftarSiswaBody.innerHTML = '';
+            if (students.length === 0) {
+                 daftarSiswaBody.innerHTML = '<tr><td colspan="4" class="text-center py-4 text-slate-400">Belum ada siswa di kelas ini.</td></tr>';
+                 return;
+            }
+            students.sort((a,b) => a.name.localeCompare(b.name)).forEach(student => {
+                const row = document.createElement('tr');
+                row.className = 'hover:bg-slate-700/50';
+                row.innerHTML = `
+                    <td class="px-6 py-4 whitespace-nowrap">${student.name}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-slate-400">${student.nisn || '-'}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-slate-400">${student.gender === 'L' ? 'Laki-laki' : 'Perempuan'}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                        <button data-id="${student.id}" data-student='${JSON.stringify(student)}' class="edit-student-btn text-cyan-400 hover:text-cyan-300">Ubah</button>
+                        <button data-id="${student.id}" class="delete-student-btn text-red-400 hover:text-red-300 ml-4">Hapus</button>
+                    </td>
+                `;
+                daftarSiswaBody.appendChild(row);
+            });
+        };
+        
+        formTambahSiswa.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const studentName = namaSiswaInput.value.trim();
+            const nisn = nisnSiswaInput.value.trim();
+            const gender = genderSiswaSelect.value;
+            if (studentName && nisn && gender && currentClassId) {
+                const studentId = `student_${Date.now()}`;
+                db_setDoc('students', studentId, { 
+                    name: studentName, 
+                    nisn: nisn,
+                    gender: gender,
+                    classId: currentClassId,
+                });
+                formTambahSiswa.reset();
+                refreshStudentsForCurrentClass();
+            }
+        });
+        
+        daftarSiswaBody.addEventListener('click', (e) => {
+            if (e.target.classList.contains('delete-student-btn')) {
+                const studentId = e.target.dataset.id;
+                if (confirm('Yakin ingin menghapus siswa ini? Pilihan yang dibuat dan ditujukan padanya akan dihapus.')) {
+                    db_deleteDoc('students', studentId);
+                    refreshStudentsForCurrentClass();
+                }
+            } else if (e.target.classList.contains('edit-student-btn')) {
+                const studentData = JSON.parse(e.target.dataset.student);
+                const modal = document.getElementById('edit-student-modal');
+                const nameInput = document.getElementById('edit-nama-siswa-input');
+                const nisnInput = document.getElementById('edit-nisn-siswa-input');
+                const genderSelect = document.getElementById('edit-gender-siswa-select');
+                const saveBtn = document.getElementById('save-edit-student-button');
+                
+                nameInput.value = studentData.name;
+                nisnInput.value = studentData.nisn;
+                genderSelect.value = studentData.gender;
+                modal.classList.remove('hidden');
+                
+                const saveHandler = () => {
+                    const newName = nameInput.value.trim();
+                    const newNisn = nisnInput.value.trim();
+                    const newGender = genderSelect.value;
+                    if (newName && newNisn && newGender) {
+                        db_setDoc('students', studentData.id, 
+                        { name: newName, nisn: newNisn, gender: newGender });
+                    }
+                    modal.classList.add('hidden');
+                    saveBtn.removeEventListener('click', saveHandler);
+                    refreshStudentsForCurrentClass();
+                };
+                saveBtn.addEventListener('click', saveHandler);
+                document.getElementById('cancel-edit-student-button').onclick = () => {
+                     modal.classList.add('hidden');
+                     saveBtn.removeEventListener('click', saveHandler);
+                };
+            }
+        });
+
+        // --- INPUT PILIHAN SISWA ---
+        const pilihKelasInput = document.getElementById('pilih-kelas-input');
+        const pilihPemilihSelect = document.getElementById('pilih-pemilih');
+        const panelPilihan = document.getElementById('panel-pilihan');
+        const daftarPilihanSuka = document.getElementById('daftar-pilihan-suka');
+        const daftarPilihanTidakSuka = document.getElementById('daftar-pilihan-tidak-suka');
+        const submitPilihanBtn = document.getElementById('submit-pilihan');
+
+        const populateClassDropdowns = (classes) => {
+            const sortedClasses = classes.sort((a,b) => a.name.localeCompare(b.name));
+            const selects = [document.getElementById('pilih-kelas-input'), document.getElementById('pilih-kelas-hasil')];
+            selects.forEach(select => {
+                const currentVal = select.value;
+                select.innerHTML = '<option value="">Pilih Kelas</option>';
+                sortedClasses.forEach(cls => {
+                    select.innerHTML += `<option value="${cls.id}">${cls.name}</option>`;
+                });
+                select.value = currentVal;
+            });
+        };
+
+        pilihKelasInput.addEventListener('change', (e) => {
+            const classId = e.target.value;
+            pilihPemilihSelect.innerHTML = '<option value="">Pilih Nama Anda</option>';
+            panelPilihan.classList.add('hidden');
+            if (!classId) return;
+
+            const students = db_getCollection('students', ['classId', '==', classId]);
+            students.sort((a,b) => a.name.localeCompare(b.name)).forEach(s => {
+                pilihPemilihSelect.innerHTML += `<option value="${s.id}">${s.name}</option>`;
+            });
+        });
+
+        pilihPemilihSelect.addEventListener('change', (e) => {
+            const chooserId = e.target.value;
+            const classId = pilihKelasInput.value;
+            panelPilihan.classList.add('hidden');
+            if (!chooserId) return;
+
+            const students = db_getCollection('students', ['classId', '==', classId]);
+            
+            daftarPilihanSuka.innerHTML = '';
+            daftarPilihanTidakSuka.innerHTML = '';
+            
+            students.sort((a,b) => a.name.localeCompare(b.name)).forEach(s => {
+                if (s.id !== chooserId) {
+                    const optionHTML = `
+                    <label class="flex items-center space-x-3 p-2 rounded-md hover:bg-slate-700 has-[:disabled]:opacity-50 has-[:disabled]:cursor-not-allowed transition-colors">
+                        <input type="checkbox" value="${s.id}" class="h-4 w-4 rounded bg-slate-600 border-slate-500 text-cyan-500 focus:ring-cyan-500">
+                        <span>${s.name}</span>
+                    </label>`;
+                    daftarPilihanSuka.innerHTML += optionHTML.replace('type="checkbox"','type="checkbox" class="like-checkbox"');
+                    daftarPilihanTidakSuka.innerHTML += optionHTML.replace('type="checkbox"','type="checkbox" class="dislike-checkbox"');
+                }
+            });
+            
+            const choiceDoc = db_getDoc('choices', `${classId}_${chooserId}`);
+            if(choiceDoc){
+                const data = choiceDoc;
+                (data.likedIds || []).forEach(id => {
+                    const cb = document.querySelector(`.like-checkbox[value="${id}"]`);
+                    if(cb) cb.checked = true;
+                });
+                (data.dislikedIds || []).forEach(id => {
+                     const cb = document.querySelector(`.dislike-checkbox[value="${id}"]`);
+                     if(cb) cb.checked = true;
+                });
+                updateCheckboxStates();
+            }
+
+            panelPilihan.classList.remove('hidden');
+        });
+        
+        function updateCheckboxStates() {
+            const likedChecks = new Set(Array.from(document.querySelectorAll('.like-checkbox:checked')).map(cb => cb.value));
+            const dislikedChecks = new Set(Array.from(document.querySelectorAll('.dislike-checkbox:checked')).map(cb => cb.value));
+
+            document.querySelectorAll('.like-checkbox').forEach(cb => cb.disabled = dislikedChecks.has(cb.value));
+            document.querySelectorAll('.dislike-checkbox').forEach(cb => cb.disabled = likedChecks.has(cb.value));
+        }
+        
+        panelPilihan.addEventListener('change', (e) => {
+             if (e.target.matches('.like-checkbox, .dislike-checkbox')) {
+                const isLike = e.target.classList.contains('like-checkbox');
+                const list = isLike ? '.like-checkbox' : '.dislike-checkbox';
+                const checkedBoxes = document.querySelectorAll(`${list}:checked`);
+                if (checkedBoxes.length > 3) {
+                    alert('Anda hanya bisa memilih maksimal 3 teman per kategori.');
+                    e.target.checked = false;
+                }
+                updateCheckboxStates();
+             }
+        });
+
+        submitPilihanBtn.addEventListener('click', () => {
+            const classId = pilihKelasInput.value;
+            const chooserId = pilihPemilihSelect.value;
+            if (!classId || !chooserId) {
+                alert('Silakan pilih kelas dan nama Anda.'); return;
+            }
+            
+            const likedIds = Array.from(document.querySelectorAll('.like-checkbox:checked')).map(cb => cb.value);
+            const dislikedIds = Array.from(document.querySelectorAll('.dislike-checkbox:checked')).map(cb => cb.value);
+
+            if(likedIds.length === 0 && dislikedIds.length === 0){
+                if(!confirm('Anda belum memilih siapapun. Lanjutkan menyimpan pilihan kosong?')) return;
+            }
+
+            db_setDoc('choices', `${classId}_${chooserId}`, {
+                classId, chooserId, likedIds, dislikedIds
+            });
+            alert('Pilihan Anda berhasil disimpan!');
+            pilihPemilihSelect.value = "";
+            panelPilihan.classList.add('hidden');
+        });
+
+        // --- HASIL & SOSIOGRAM ---
+        const generateReportBtn = document.getElementById('generate-report');
+        
+        generateReportBtn.addEventListener('click', () => {
+            const classId = document.getElementById('pilih-kelas-hasil').value;
+            if(!classId) { alert("Pilih kelas terlebih dahulu."); return; }
+            
+            const students = db_getCollection('students', ['classId', '==', classId]);
+            students.sort((a,b) => a.name.localeCompare(b.name));
+            
+            if(students.length < 2) { alert("Jumlah siswa tidak cukup untuk membuat analisis."); return; }
+
+            const choices = db_getCollection('choices', ['classId', '==', classId]);
+
+            // Process data
+            const likedScores = new Map(students.map(s => [s.id, 0]));
+            const dislikedScores = new Map(students.map(s => [s.id, 0]));
+            const choiceMap = new Map();
+
+            choices.forEach(c => {
+                choiceMap.set(c.chooserId, { liked: new Set(c.likedIds), disliked: new Set(c.dislikedIds) });
+                (c.likedIds || []).forEach(id => likedScores.set(id, (likedScores.get(id) || 0) + 1));
+                (c.dislikedIds || []).forEach(id => dislikedScores.set(id, (dislikedScores.get(id) || 0) + 1));
+            });
+
+            // Analysis
+            const isolatesData = [];
+            const starsData = [];
+            const rejectedData = [];
+
+            students.forEach(s => {
+                const liked = likedScores.get(s.id);
+                const disliked = dislikedScores.get(s.id);
+
+                if (liked === 0 && disliked === 0) {
+                    isolatesData.push(s.name);
+                }
+                if (liked > 0) {
+                    starsData.push({ name: s.name, score: liked });
+                }
+                if (disliked > 0) {
+                    rejectedData.push({ name: s.name, score: disliked });
+                }
+            });
+
+            // Sort, slice to top 3, and format for display
+            const stars = starsData
+                .sort((a, b) => b.score - a.score)
+                .slice(0, 3)
+                .map(s => `${s.name} (${s.score} pilihan)`);
+
+            const rejected = rejectedData
+                .sort((a, b) => b.score - a.score)
+                .slice(0, 3)
+                .map(s => `${s.name} (${s.score} pilihan)`);
+
+            const isolates = isolatesData.slice(0, 3);
+            
+            // Store data for export (using the formatted, sliced data)
+            currentAnalysisData = { students, choices, choiceMap, stars, rejected, isolates };
+
+            // Render
+            document.getElementById('list-bintang').innerHTML = stars.length ? stars.map(s => `<li>${s}</li>`).join('') : '<li>Tidak ada</li>';
+            document.getElementById('list-ditolak').innerHTML = rejected.length ? rejected.map(s => `<li>${s}</li>`).join('') : '<li>Tidak ada</li>';
+            document.getElementById('list-isolasi').innerHTML = isolates.length ? isolates.map(s => `<li>${s}</li>`).join('') : '<li>Tidak ada</li>';
+            
+            renderSociomatrix(students, choiceMap);
+            renderSociogram(students, choices);
+            
+            document.getElementById('konten-hasil').classList.remove('hidden');
+        });
+
+        const renderSociomatrix = (students, choiceMap) => {
+            const head = document.getElementById('matriks-head');
+            const body = document.getElementById('matriks-body');
+            
+            let headHTML = '<tr><th class="p-2 bg-slate-800 text-left">Pemilih \\ Dipilih</th>';
+            students.forEach((s, index) => headHTML += `<th class="w-10 text-center text-xs font-medium text-slate-400 uppercase" title="${s.name}">${index+1}</th>`);
+            headHTML += '<th class="p-2 text-center text-emerald-400">Suka</th><th class="p-2 text-center text-pink-400">Tdk Suka</th></tr>';
+            head.innerHTML = headHTML;
+            
+            let bodyHTML = '';
+            const totalLikedScores = new Array(students.length).fill(0);
+            const totalDislikedScores = new Array(students.length).fill(0);
+            
+            students.forEach((chooser, rowIndex) => {
+                bodyHTML += `<tr class="hover:bg-slate-700/50"><td class="p-2 whitespace-nowrap font-semibold bg-slate-800/50"><span class="text-xs text-slate-500 mr-2">${rowIndex+1}.</span>${chooser.name}</td>`;
+                const choices = choiceMap.get(chooser.id) || { liked: new Set(), disliked: new Set() };
+                
+                students.forEach((chosen, colIndex) => {
+                    if(chooser.id === chosen.id) {
+                        bodyHTML += `<td class="text-center bg-slate-700/50">-</td>`;
+                    } else {
+                        let score = 0;
+                        if (choices.liked.has(chosen.id)) { score = 1; totalLikedScores[colIndex]++; }
+                        if (choices.disliked.has(chosen.id)) { score = -1; totalDislikedScores[colIndex]++; }
+                        const color = score === 1 ? 'text-emerald-400' : (score === -1 ? 'text-pink-400' : 'text-slate-500');
+                        bodyHTML += `<td class="text-center font-bold ${color}">${score}</td>`;
+                    }
+                });
+                bodyHTML += `<td class="text-center font-bold bg-emerald-500/10 text-emerald-400">${choices.liked.size}</td>`;
+                bodyHTML += `<td class="text-center font-bold bg-pink-500/10 text-pink-400">${choices.disliked.size}</td></tr>`;
+            });
+            
+            bodyHTML += '<tr><td class="p-2 font-bold bg-slate-800">Total Disukai</td>';
+            totalLikedScores.forEach(score => bodyHTML += `<td class="text-center font-bold bg-emerald-500/20 text-emerald-300">${score}</td>`);
+            bodyHTML += '<td class="bg-slate-800" colspan="2"></td></tr>';
+            bodyHTML += '<tr><td class="p-2 font-bold bg-slate-800">Total Tdk Disukai</td>';
+            totalDislikedScores.forEach(score => bodyHTML += `<td class="text-center font-bold bg-pink-500/20 text-pink-300">${score}</td>`);
+            bodyHTML += '<td class="bg-slate-800" colspan="2"></td></tr>';
+            body.innerHTML = bodyHTML;
+        }
+
+        const renderSociogram = (students, choices) => {
+            const svg = d3.select("#sociogram");
+            const width = svg.node().clientWidth;
+            const height = svg.node().clientHeight;
+            svg.selectAll("*").remove();
+            
+            if (sociogramSimulation) sociogramSimulation.stop();
+
+            const nodes = students.map(s => ({...s, x: width / 2 + Math.random() * 10 - 5, y: height / 2 + Math.random() * 10 - 5 }));
+            const links = [];
+            choices.forEach(c => {
+                (c.likedIds || []).forEach(id => links.push({ source: c.chooserId, target: id, type: 'like' }));
+                (c.dislikedIds || []).forEach(id => links.push({ source: c.chooserId, target: id, type: 'dislike' }));
+            });
+
+            const simulation = d3.forceSimulation(nodes)
+                .force("link", d3.forceLink(links).id(d => d.id).distance(150))
+                .force("charge", d3.forceManyBody().strength(-400))
+                .force("center", d3.forceCenter(width / 2, height / 2));
+            
+            svg.append("defs").selectAll("marker")
+                .data(["like", "dislike"])
+                .enter().append("marker")
+                .attr("id", d => `arrow-${d}`)
+                .attr("viewBox", "0 -5 10 10")
+                .attr("refX", 22)
+                .attr("refY", 0)
+                .attr("markerWidth", 6)
+                .attr("markerHeight", 6)
+                .attr("orient", "auto")
+                .append("path")
+                .attr("d", "M0,-5L10,0L0,5")
+                .attr("class", d => `arrowhead ${d}`);
+
+            const link = svg.append("g").selectAll("line").data(links).join("line")
+                .attr("class", d => `link ${d.type}`)
+                .attr("marker-end", d => `url(#arrow-${d.type})`);
+
+            const nodeGroup = svg.append("g")
+                .selectAll("g")
+                .data(nodes)
+                .join("g")
+                .call(drag(simulation));
+
+            // Invisible circle for interaction and hover effects
+            nodeGroup.append("circle")
+              .attr("r", 20) // A bit larger than the symbol
+              .attr("fill", "transparent")
+              .attr("class", "node") 
+              .style("cursor", "grab");
+
+            // Male nodes (circle)
+            nodeGroup.filter(d => d.gender === 'L').append('circle')
+                .attr('r', 12)
+                .attr('fill', '#3b82f6')
+                .style("pointer-events", "none");
+
+            // Female nodes (triangle)
+            const triangle = d3.symbol().type(d3.symbolTriangle).size(250);
+            nodeGroup.filter(d => d.gender === 'P').append('path')
+                .attr('d', triangle)
+                .attr('fill', '#ec4899')
+                .style("pointer-events", "none");
+
+            // Name text
+            nodeGroup.append("text")
+              .text(d => d.name)
+              .attr("y", 25) // Position below the group center
+              .attr("class", "node-text")
+              .attr("text-anchor", "middle");
+
+            simulation.on("tick", () => {
+                link.attr("x1", d => d.source.x).attr("y1", d => d.source.y)
+                    .attr("x2", d => d.target.x).attr("y2", d => d.target.y);
+                nodeGroup.attr("transform", d => `translate(${d.x},${d.y})`);
+            });
+            sociogramSimulation = simulation;
+        }
+        
+        function drag(simulation) {
+          function dragstarted(event, d) {
+            if (!event.active) simulation.alphaTarget(0.3).restart();
+            d.fx = d.x; d.fy = d.y;
+          }
+          function dragged(event, d) {
+            d.fx = event.x; d.fy = event.y;
+          }
+          function dragended(event, d) {
+            if (!event.active) simulation.alphaTarget(0);
+            d.fx = null; d.fy = null;
+          }
+          return d3.drag().on("start", dragstarted).on("drag", dragged).on("end", dragended);
+        }
+
+        // --- IMPORT & EXPORT ---
+        importExcelInput.addEventListener('change', (e) => {
+            if (!currentClassId) {
+                alert("Pilih kelas terlebih dahulu sebelum mengimpor siswa.");
+                e.target.value = '';
+                return;
+            }
+            const file = e.target.files[0];
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                const data = new Uint8Array(event.target.result);
+                const workbook = XLSX.read(data, { type: 'array' });
+                const firstSheetName = workbook.SheetNames[0];
+                const worksheet = workbook.Sheets[firstSheetName];
+                const json = XLSX.utils.sheet_to_json(worksheet);
+                
+                let importedCount = 0;
+                json.forEach(row => {
+                    const name = row.Nama || row.nama || row.NAME;
+                    const nisn = row.NISN || row.nisn;
+                    let gender = row.Gender || row.gender || row.JENIS_KELAMIN;
+                    
+                    if(name && nisn && gender){
+                        gender = String(gender).toUpperCase().charAt(0);
+                        if(gender === 'L' || gender === 'P'){
+                            const studentId = `student_${Date.now()}_${importedCount}`;
+                             db_setDoc('students', studentId, { 
+                                name: String(name).trim(), 
+                                nisn: String(nisn).trim(),
+                                gender: gender,
+                                classId: currentClassId,
+                            });
+                            importedCount++;
+                        }
+                    }
+                });
+                alert(`${importedCount} siswa berhasil diimpor.`);
+                refreshStudentsForCurrentClass();
+                e.target.value = '';
+            };
+            reader.readAsArrayBuffer(file);
+        });
+
+        document.getElementById('export-excel-btn').addEventListener('click', () => {
+            const { students, choiceMap, stars, rejected, isolates } = currentAnalysisData;
+            if (!students || students.length === 0) {
+                alert("Tidak ada data untuk diekspor.");
+                return;
+            }
+
+            const wb = XLSX.utils.book_new();
+            
+            // Sheet 1: Ringkasan Analisis
+            const classIdForExport = document.getElementById('pilih-kelas-hasil').value;
+            const classData = allClasses.find(c => c.id === classIdForExport);
+            const teacherName = allTeachers.find(t => t.id === classData?.teacherId)?.name || 'Belum diatur';
+
+            const summaryData = [
+                { Kategori: "Bintang Positif (Stars)", Siswa: stars.join(', ') || 'Tidak ada' },
+                { Kategori: "Siswa Ditolak (Rejected)", Siswa: rejected.join(', ') || 'Tidak ada' },
+                { Kategori: "Terisolasi (Isolates)", Siswa: isolates.join(', ') || 'Tidak ada' },
+                {},
+                { Kategori: "Guru BK Penanggung Jawab", Siswa: teacherName },
+            ];
+            const wsSummary = XLSX.utils.json_to_sheet(summaryData);
+            XLSX.utils.book_append_sheet(wb, wsSummary, "Ringkasan Analisis");
+
+            // Sheet 2: Matriks Sosiometri
+            const matrixData = [];
+            const header = ['Pemilih \\ Dipilih', ...students.map(s => s.name), 'Total Suka', 'Total Tdk Suka'];
+            matrixData.push(header);
+
+            const totalLikedScores = new Array(students.length).fill(0);
+            const totalDislikedScores = new Array(students.length).fill(0);
+
+            students.forEach(chooser => {
+                const row = [chooser.name];
+                const choices = choiceMap.get(chooser.id) || { liked: new Set(), disliked: new Set() };
+                students.forEach((chosen, colIndex) => {
+                    if (chooser.id === chosen.id) {
+                        row.push('-');
+                    } else {
+                        let score = 0;
+                        if (choices.liked.has(chosen.id)) { score = 1; totalLikedScores[colIndex]++; }
+                        if (choices.disliked.has(chosen.id)) { score = -1; totalDislikedScores[colIndex]++; }
+                        row.push(score);
+                    }
+                });
+                row.push(choices.liked.size);
+                row.push(choices.disliked.size);
+                matrixData.push(row);
+            });
+            const likedTotalsRow = ['Total Disukai', ...totalLikedScores, '', ''];
+            const dislikedTotalsRow = ['Total Tdk Disukai', ...totalDislikedScores, '', ''];
+            matrixData.push(likedTotalsRow);
+            matrixData.push(dislikedTotalsRow);
+
+            const wsMatrix = XLSX.utils.aoa_to_sheet(matrixData);
+            XLSX.utils.book_append_sheet(wb, wsMatrix, "Matriks Sosiometri");
+            
+            const className = classData?.name || 'kelas';
+            XLSX.writeFile(wb, `Hasil Sosiometri - ${className}.xlsx`);
+        });
+
+        document.getElementById('export-pdf-btn').addEventListener('click', async () => {
+            const { students, choiceMap, stars, rejected, isolates } = currentAnalysisData;
+            if (!students || students.length === 0) {
+                alert("Tidak ada data untuk dicetak.");
+                return;
+            }
+
+            const loadingOverlay = document.getElementById('loading-overlay');
+            loadingOverlay.classList.remove('hidden');
+
+            const { jsPDF } = window.jspdf;
+            // F4 landscape: 330mm x 210mm -> 935.43pt x 595.27pt
+            const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: [935, 595] });
+            
+            const classIdForPdf = document.getElementById('pilih-kelas-hasil').value;
+            const classData = allClasses.find(c => c.id === classIdForPdf);
+            const teacherName = allTeachers.find(t => t.id === classData?.teacherId)?.name || 'Belum diatur';
+
+            const schoolName = localStorage.getItem(DB_PREFIX + 'schoolName') || 'Nama Sekolah Belum Diatur';
+            const className = classData?.name || 'Kelas';
+            const reportTitle = `Laporan Sosiometri`;
+            const subTitle = `${schoolName} - Kelas ${className}`;
+            const teacherInfo = `Guru BK: ${teacherName}`;
+            const generationDate = new Date().toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+            const pdfWidth = doc.internal.pageSize.getWidth();
+            const pdfHeight = doc.internal.pageSize.getHeight();
+
+            // Add Sosiogram Image
+            try {
+                const svgElement = document.querySelector('#sociogram');
+                let styleDefs = document.getElementById('app-styles').textContent;
+                // For PDF export, change text color to black for visibility on white background
+                styleDefs = styleDefs.replace(/fill: #e5e7eb;/g, 'fill: #000000;')
+                                     .replace(/text-shadow: 0 0 3px #000;/g, '');
+                
+                const clonedSvgElement = svgElement.cloneNode(true);
+                const style = document.createElementNS("http://www.w3.org/2000/svg", "style");
+                style.textContent = styleDefs;
+
+                let defs = clonedSvgElement.querySelector('defs');
+                if (!defs) {
+                    defs = document.createElementNS("http://www.w3.org/2000/svg", 'defs');
+                    clonedSvgElement.insertBefore(defs, clonedSvgElement.firstChild);
+                }
+                defs.appendChild(style);
+                
+                const svgString = new XMLSerializer().serializeToString(clonedSvgElement);
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                const DOMURL = window.URL || window.webkitURL || window;
+                const img = new Image();
+                const svgBlob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
+                const url = DOMURL.createObjectURL(svgBlob);
+
+                const getImageDataUrl = () => new Promise((resolve, reject) => {
+                    img.onload = () => {
+                        canvas.width = svgElement.clientWidth || 1120;
+                        canvas.height = svgElement.clientHeight || 600;
+                        ctx.fillStyle = '#FFFFFF'; // White background
+                        ctx.fillRect(0, 0, canvas.width, canvas.height);
+                        ctx.drawImage(img, 0, 0);
+                        const pngUrl = canvas.toDataURL('image/png');
+                        DOMURL.revokeObjectURL(url);
+                        resolve(pngUrl);
+                    };
+                    img.onerror = (err) => {
+                        DOMURL.revokeObjectURL(url);
+                        reject(err);
+                    };
+                    img.src = url;
+                });
+
+                const imgData = await getImageDataUrl();
+                const imgProps = doc.getImageProperties(imgData);
+                const ratio = Math.min((pdfWidth * 0.95) / imgProps.width, (pdfHeight * 0.85) / imgProps.height);
+                const imgWidth = imgProps.width * ratio;
+                const imgHeight = imgProps.height * ratio;
+                const x = (pdfWidth - imgWidth) / 2;
+                const y = 80;
+
+                doc.setFontSize(18).text(reportTitle, pdfWidth / 2, 40, { align: 'center' });
+                doc.setFontSize(14).text(subTitle, pdfWidth / 2, 60, { align: 'center' });
+                doc.addImage(imgData, 'PNG', x, y, imgWidth, imgHeight);
+
+                doc.addPage();
+            } catch (error) {
+                console.error("Error generating sosiogram image for PDF:", error);
+                alert("Gagal membuat gambar sosiogram untuk PDF. Silakan coba lagi.");
+                loadingOverlay.classList.add('hidden');
+                return;
+            }
+            
+            // Add Summary, Legend, and Matrix on the new page
+            doc.setFontSize(18).text(reportTitle, pdfWidth / 2, 40, { align: 'center' });
+            doc.setFontSize(14).text(subTitle, pdfWidth / 2, 60, { align: 'center' });
+            doc.setFontSize(12).text(teacherInfo, pdfWidth / 2, 80, { align: 'center' });
+
+            const summaryBody = [
+                ['Bintang Positif', stars.join(', ') || 'Tidak ada'],
+                ['Siswa Ditolak', rejected.join(', ') || 'Tidak ada'],
+                ['Siswa Terisolasi', isolates.join(', ') || 'Tidak ada'],
+            ];
+            doc.autoTable({
+                startY: 100,
+                head: [['Kategori Analisis', 'Siswa']],
+                body: summaryBody,
+                theme: 'grid',
+                headStyles: { fillColor: [75, 85, 99] }, // slate-600
+            });
+
+            // Student Legend for Matrix
+            doc.setFontSize(12).text("Legenda Matriks Sosiometri", 40, doc.lastAutoTable.finalY + 30);
+            const legendBody = students.map((s, i) => [`${i + 1}`, s.name]);
+            doc.autoTable({
+                startY: doc.lastAutoTable.finalY + 40,
+                head: [['No.', 'Nama Siswa']],
+                body: legendBody,
+                theme: 'grid',
+                headStyles: { fillColor: [75, 85, 99], fontSize: 9 },
+                bodyStyles: { fontSize: 8 },
+                columnStyles: { 0: { cellWidth: 30 } },
+                // Split table into columns to save vertical space
+                didDrawPage: function (data) {
+                    if (data.cursor.y > pdfHeight - 40) {
+                        data.addPage();
+                        data.cursor.y = 40;
+                    }
+                }
+            });
+
+
+            // Matrix Table
+            const matrixHead = [['Pemilih', ...students.map((s, i) => `${i+1}`)]];
+            const matrixBody = [];
+             students.forEach(chooser => {
+                const row = [chooser.name];
+                const choices = choiceMap.get(chooser.id) || { liked: new Set(), disliked: new Set() };
+                students.forEach(chosen => {
+                    if (chooser.id === chosen.id) row.push('-');
+                    else {
+                        let score = 0;
+                        if (choices.liked.has(chosen.id)) score = 1;
+                        if (choices.disliked.has(chosen.id)) score = -1;
+                        row.push(score.toString());
+                    }
+                });
+                matrixBody.push(row);
+            });
+
+            doc.autoTable({
+                startY: doc.lastAutoTable.finalY + 20,
+                head: matrixHead,
+                body: matrixBody,
+                theme: 'grid',
+                headStyles: { fillColor: [75, 85, 99], fontSize: 8, halign: 'center' },
+                bodyStyles: { fontSize: 8, cellWidth: 'auto', halign: 'center' },
+                columnStyles: { 0: { cellWidth: 80, halign: 'left' } },
+            });
+
+            const pageCount = doc.internal.getNumberOfPages();
+            for (let i = 1; i <= pageCount; i++) {
+                doc.setPage(i);
+                doc.setFontSize(8);
+                doc.setTextColor(128);
+                doc.text(
+                    `Aplikasi Sosiometri & Sosiogram | Dibuat oleh Muhammad Hasratul | Dicetak pada: ${generationDate}`,
+                    pdfWidth / 2,
+                    pdfHeight - 20,
+                    { align: 'center' }
+                );
+            }
+
+            doc.save(`Laporan Sosiometri - ${className}.pdf`);
+            loadingOverlay.classList.add('hidden');
+        });
+
+
+        // --- INITIALIZATION ---
+        function displayCurrentDate() {
+            const dateEl = document.getElementById('current-date');
+            const now = new Date();
+            const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+            dateEl.textContent = now.toLocaleDateString('id-ID', options);
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const startAppBtn = document.getElementById('start-app-btn');
+            const welcomeView = document.getElementById('welcome-view');
+            const appContainer = document.getElementById('app-container');
+            const schoolNameInput = document.getElementById('school-name-input');
+            const schoolNameDisplay = document.getElementById('school-name-display');
+            const backToWelcomeBtn = document.getElementById('back-to-welcome-btn');
+
+            const savedSchoolName = localStorage.getItem(DB_PREFIX + 'schoolName');
+            if(savedSchoolName) {
+                schoolNameInput.value = savedSchoolName;
+                schoolNameDisplay.textContent = savedSchoolName;
+                welcomeView.classList.add('hidden');
+                appContainer.classList.remove('hidden');
+            }
+
+            startAppBtn.addEventListener('click', () => {
+                const schoolName = schoolNameInput.value.trim();
+                if (!schoolName) {
+                    alert('Silakan masukkan nama sekolah terlebih dahulu.');
+                    return;
+                }
+                localStorage.setItem(DB_PREFIX + 'schoolName', schoolName);
+                schoolNameDisplay.textContent = schoolName;
+                welcomeView.classList.add('hidden');
+                appContainer.classList.remove('hidden');
+            });
+
+            backToWelcomeBtn.addEventListener('click', () => {
+                appContainer.classList.add('hidden');
+                welcomeView.classList.remove('hidden');
+            });
+
+
+            document.getElementById('loading-overlay').style.display = 'none';
+            populateWithSampleData();
+            refreshUI();
+            displayCurrentDate();
+            
+            const sampleClassId = 'class_1700000000000';
+            const classSelect = document.getElementById('pilih-kelas-hasil');
+            if (Array.from(classSelect.options).some(opt => opt.value === sampleClassId)) {
+                classSelect.value = sampleClassId;
+            }
+        });
+
+    </script>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+</body>
+</html>
+
