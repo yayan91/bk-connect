@@ -139,16 +139,30 @@
                 <!-- Panel Admin View -->
                 <div id="view-admin" class="view active">
                      <div class="grid lg:grid-cols-3 gap-6">
-                        <!-- Teacher Management -->
-                        <div class="bg-slate-800/50 backdrop-blur-sm border border-slate-700 p-6 rounded-lg lg:col-span-1">
-                            <h2 class="text-2xl font-semibold mb-4 border-b border-slate-600 pb-2 text-fuchsia-400">Manajemen Guru BK</h2>
-                            <form id="form-tambah-guru" class="mb-4 space-y-3">
-                                <input type="text" id="nama-guru" placeholder="Nama Guru BK" class="w-full p-2 bg-slate-700 border border-slate-600 rounded-md focus:ring-2 focus:ring-fuchsia-500 focus:border-fuchsia-500 text-white placeholder-gray-400" required>
-                                <input type="text" id="nip-guru" placeholder="NIP/ID Guru (Opsional)" class="w-full p-2 bg-slate-700 border border-slate-600 rounded-md focus:ring-2 focus:ring-fuchsia-500 focus:border-fuchsia-500 text-white placeholder-gray-400">
-                                <button type="submit" class="w-full mt-2 bg-gradient-to-r from-fuchsia-500 to-purple-500 hover:from-fuchsia-600 hover:to-purple-600 text-white font-bold py-2 px-4 rounded-md transition-all duration-300">Tambah Guru</button>
-                            </form>
-                            <div id="daftar-guru" class="space-y-2 max-h-96 overflow-y-auto">
-                                <!-- Teacher list rendered here -->
+                        <!-- Teacher and Backup/Restore Management -->
+                        <div class="bg-slate-800/50 backdrop-blur-sm border border-slate-700 p-6 rounded-lg lg:col-span-1 space-y-6">
+                             <div>
+                                <h2 class="text-2xl font-semibold mb-4 border-b border-slate-600 pb-2 text-fuchsia-400">Manajemen Guru BK</h2>
+                                <form id="form-tambah-guru" class="mb-4 space-y-3">
+                                    <input type="text" id="nama-guru" placeholder="Nama Guru BK" class="w-full p-2 bg-slate-700 border border-slate-600 rounded-md focus:ring-2 focus:ring-fuchsia-500 focus:border-fuchsia-500 text-white placeholder-gray-400" required>
+                                    <input type="text" id="nip-guru" placeholder="NIP/ID Guru (Opsional)" class="w-full p-2 bg-slate-700 border border-slate-600 rounded-md focus:ring-2 focus:ring-fuchsia-500 focus:border-fuchsia-500 text-white placeholder-gray-400">
+                                    <button type="submit" class="w-full mt-2 bg-gradient-to-r from-fuchsia-500 to-purple-500 hover:from-fuchsia-600 hover:to-purple-600 text-white font-bold py-2 px-4 rounded-md transition-all duration-300">Tambah Guru</button>
+                                </form>
+                                <div id="daftar-guru" class="space-y-2 max-h-60 overflow-y-auto">
+                                    <!-- Teacher list rendered here -->
+                                </div>
+                            </div>
+                            <div class="bg-slate-800/50 backdrop-blur-sm border border-slate-700 p-6 rounded-lg">
+                                <h2 class="text-2xl font-semibold mb-4 border-b border-slate-600 pb-2 text-amber-400">Pengaturan Data</h2>
+                                <div class="space-y-4">
+                                    <button id="backup-data-btn" class="w-full bg-gradient-to-r from-sky-500 to-cyan-500 hover:from-sky-600 hover:to-cyan-600 text-white font-bold py-2 px-4 rounded-md transition-all duration-300">Unduh Cadangan (Backup)</button>
+                                    <div>
+                                        <label class="block text-sm font-medium text-slate-300 mb-2">Pulihkan dari File Cadangan (.json)</label>
+                                        <input type="file" id="restore-file-input" class="w-full text-sm text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-amber-500/10 file:text-amber-300 hover:file:bg-amber-500/20" accept=".json">
+                                    </div>
+                                    <div class="border-t border-slate-700 my-4"></div>
+                                    <button id="delete-all-data-btn" class="w-full bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-700 hover:to-rose-700 text-white font-bold py-2 px-4 rounded-md transition-all duration-300">Hapus Semua Data</button>
+                                </div>
                             </div>
                         </div>
 
@@ -1362,8 +1376,8 @@
             // Matrix Table
             const matrixHead = [['Pemilih', ...students.map((s, i) => `${i+1}`)]];
             const matrixBody = [];
-             students.forEach(chooser => {
-                const row = [chooser.name];
+             students.forEach((chooser, rowIndex) => {
+                const row = [`${rowIndex + 1}. ${chooser.name}`];
                 const choices = choiceMap.get(chooser.id) || { liked: new Set(), disliked: new Set() };
                 students.forEach(chosen => {
                     if (chooser.id === chosen.id) row.push('-');
@@ -1420,7 +1434,11 @@
             const schoolNameInput = document.getElementById('school-name-input');
             const schoolNameDisplay = document.getElementById('school-name-display');
             const backToWelcomeBtn = document.getElementById('back-to-welcome-btn');
+            const backupBtn = document.getElementById('backup-data-btn');
+            const restoreInput = document.getElementById('restore-file-input');
+            const deleteAllBtn = document.getElementById('delete-all-data-btn');
 
+            // Welcome screen logic
             const savedSchoolName = localStorage.getItem(DB_PREFIX + 'schoolName');
             if(savedSchoolName) {
                 schoolNameInput.value = savedSchoolName;
@@ -1444,6 +1462,82 @@
             backToWelcomeBtn.addEventListener('click', () => {
                 appContainer.classList.add('hidden');
                 welcomeView.classList.remove('hidden');
+            });
+
+            // Backup logic
+            backupBtn.addEventListener('click', () => {
+                const backupData = {};
+                for (let i = 0; i < localStorage.length; i++) {
+                    const key = localStorage.key(i);
+                    if (key.startsWith(DB_PREFIX)) {
+                        backupData[key] = localStorage.getItem(key);
+                    }
+                }
+                
+                const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                const date = new Date().toISOString().slice(0, 10);
+                a.download = `sosiometri_backup_${date}.json`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            });
+
+            // Restore logic
+            restoreInput.addEventListener('change', (event) => {
+                const file = event.target.files[0];
+                if (!file) return;
+
+                if (!confirm('PERINGATAN: Memulihkan data akan menghapus dan menimpa SEMUA data yang ada saat ini. Apakah Anda yakin ingin melanjutkan?')) {
+                    event.target.value = ''; // Reset file input
+                    return;
+                }
+
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    try {
+                        const dataToRestore = JSON.parse(e.target.result);
+                        
+                        // Clear existing data using a more robust method
+                        Object.keys(localStorage)
+                            .filter(key => key.startsWith(DB_PREFIX))
+                            .forEach(key => localStorage.removeItem(key));
+
+                        // Set new data
+                        for (const key in dataToRestore) {
+                            if (Object.hasOwnProperty.call(dataToRestore, key)) {
+                                localStorage.setItem(key, dataToRestore[key]);
+                            }
+                        }
+                        alert('Data berhasil dipulihkan!');
+                        
+                        // Refresh everything
+                        location.reload(); 
+                        
+                    } catch (error) {
+                        alert('Gagal memulihkan data. File cadangan mungkin rusak atau tidak valid.');
+                        console.error("Restore error:", error);
+                    } finally {
+                         event.target.value = ''; // Reset file input
+                    }
+                };
+                reader.readAsText(file);
+            });
+
+            // Delete All Data logic
+            deleteAllBtn.addEventListener('click', () => {
+                 if (confirm('PERINGATAN KERAS: Tindakan ini akan menghapus SEMUA data (guru, kelas, siswa, pilihan, dan nama sekolah) secara permanen dan tidak dapat dibatalkan. Apakah Anda benar-benar yakin ingin melanjutkan?')) {
+                    // Use a more robust way to clear data
+                    Object.keys(localStorage)
+                        .filter(key => key.startsWith(DB_PREFIX))
+                        .forEach(key => localStorage.removeItem(key));
+
+                    alert('Semua data aplikasi telah berhasil dihapus.');
+                    location.reload();
+                 }
             });
 
 
